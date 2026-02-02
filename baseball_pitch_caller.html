@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baseball Pitch Caller</title>
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-2: #0ea5e9;
+    --bg: #0b1220;
+    --fg: #e5e7eb;
+    --muted: #94a3b8;
+    --danger: #ef4444;
+    --ok: #22c55e;
+    --panel: #111827;
+    --border: #1f2937;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.45;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+  h1, h2, h3 { margin: 0.75rem 0 0.5rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: center; }
+  label { font-weight: 600; }
+  .muted { color: var(--muted); font-size: 0.95rem; }
+  input[type="range"] { width: 360px; }
+  .chip { display: inline-block; border: 1px dashed var(--border); border-radius: 999px; padding: 0.25rem 0.6rem; margin: 0.2rem 0.35rem 0.2rem 0; font-size: 0.9rem; color: var(--muted); background: #0d1425; }
+  button { background: var(--accent); color: white; border: none; border-radius: 10px; padding: 0.6rem 0.9rem; font-weight: 700; cursor: pointer; }
+  button.secondary { background: #374151; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .pitch-col label { display: block; margin: 0.15rem 0; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 320px; margin: 0.5rem 0 0.25rem; }
+  .zone-cell { border: 1px solid var(--border); border-radius: 10px; height: 70px; display: grid; place-items: center; font-weight: 600; color: var(--muted); background: #0d1425; }
+  .zone-cell.highlight { outline: 2px solid var(--accent-2); box-shadow: 0 0 0 3px rgba(14,165,233,0.35) inset, 0 0 25px rgba(37,99,235,0.35); color: var(--fg); background: #0f1a33; }
+
+  .count { font-size: 1.1rem; font-weight: 800; color: white; background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+  .count .ball { color: var(--ok); }
+  .count .strike { color: #f59e0b; }
+  .inline-note { display: inline-block; margin-left: 0.75rem; color: var(--muted); }
+  .suggestion { font-size: 1rem; font-weight: 700; padding: 0.5rem 0.75rem; background: #0b1328; border-radius: 10px; border: 1px solid var(--border); display: inline-block; }
+  .error { color: var(--danger); font-weight: 700; }
+  .success { color: var(--ok); font-weight: 700; }
+  .log { max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.75rem; background: #0b1328; font-size: 0.92rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Baseball Pitch Caller</h1>
+  <p class="muted">Pitchers want to keep hitters guessing. If they always throw the same pitch in the same situation, hitters will figure it out. So, this tool uses stochastic sampling to introduce randomness in a smart way.</p>
+
+  <p class="muted">Instead of always picking the single “best” pitch, it uses a technique called softmax sampling (a form of stochastic sampling) to turn factors like the pitcher’s handedness, the batter’s side, the selected pitch mix, the current count, and the batter’s swing timing into probabilities and then randomly selects a pitch and location based on those probabilities. This means the choices aren’t completely random — they’re weighted toward smarter options — but they’re not predictable either.
+</p>
+
+  <p class="muted">To use the tool, first adjust the Stochastic Sampling temperature slider to how “wild” or “safe” the recommendations are. Then select the pitcher's handedness, the pitcher's arsenal (chose between 3 and 5 pitches) and which side the batter is hitting from.
+</p>
+
+
+  <p class="muted">Next, click the "Suggest Initial Pitch & Location" button to generate the first pitch of the sequence. Report whether the pitch was a ball or strike and the swing timing.
+  </p>
+
+  <p class="muted">After an at bat has ended, click the "Suggest Next Pitch and Location" button to begin a new sequence. 
+  </p>
+
+  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
+  
+  <!-- Stochastic slider -->
+  <div class="panel" id="stochastic-panel">
+    <h2>Stochastic Sampling</h2>
+    <div class="row">
+      <label for="tempSlider">Determinism ↔ Variety</label>
+      <input id="tempSlider" type="range" min="0.35" max="2.25" step="0.05" value="0.75" />
+      <span class="chip" id="tempLabel">Temperature: 0.75 (Lower = more deterministic, Higher = more varied)</span>
+    </div>
+  </div>
+
+  <!-- Pitcher handedness -->
+  <div class="panel">
+    <h2>Pitcher Handedness</h2>
+    <div class="row" id="pitcherHandRow">
+      <label><input type="radio" name="pitcherHand" value="RHP" checked /> Right‑handed</label>
+      <label><input type="radio" name="pitcherHand" value="LHP" /> Left‑handed</label>
+    </div>
+  </div>
+
+  <!-- Hard-coded pitch arsenal in two columns: 9 + 8 -->
+  <div class="panel">
+    <h2>Select Pitch Arsenal (Choose 3–5)</h2>
+    <div id="pitchList" class="grid-2">
+      <!-- Column 1: 9 pitches -->
+      <div class="pitch-col">
+        <label><input type="checkbox" value="4-seam fastball"> 4-seam fastball</label>
+        <label><input type="checkbox" value="2-seam fastball"> 2-seam fastball</label>
+        <label><input type="checkbox" value="Cutter"> Cutter</label>
+        <label><input type="checkbox" value="Sinker"> Sinker</label>
+        <label><input type="checkbox" value="Curveball"> Curveball</label>
+        <label><input type="checkbox" value="12-6 curveball"> 12-6 curveball</label>
+        <label><input type="checkbox" value="Sweeping curveball"> Sweeping curveball</label>
+        <label><input type="checkbox" value="Knuckle-curve"> Knuckle-curve</label>
+        <label><input type="checkbox" value="Slurve"> Slurve</label>
+      </div>
+      <!-- Column 2: 8 pitches -->
+      <div class="pitch-col">
+        <label><input type="checkbox" value="Slider"> Slider</label>
+        <label><input type="checkbox" value="Sweeper"> Sweeper</label>
+        <label><input type="checkbox" value="Changeup"> Changeup</label>
+        <label><input type="checkbox" value="Circle change"> Circle change</label>
+        <label><input type="checkbox" value="Vulcan change"> Vulcan change</label>
+        <label><input type="checkbox" value="Splitter"> Splitter</label>
+        <label><input type="checkbox" value="Forkball"> Forkball</label>
+        <label><input type="checkbox" value="Screwball"> Screwball</label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:0.75rem;">
+      <span class="chip" id="arsenalCount">Selected: 0</span>
+      <button id="lockArsenalBtn">Lock Arsenal</button>
+      <button id="editArsenalBtn" class="secondary" disabled>Change Arsenal</button>
+      <span id="arsenalMsg" class="inline-note"></span>
+    </div>
+  </div>
+
+  <!-- Batter side -->
+  <div class="panel">
+    <h2>Batter Side</h2>
+    <div class="row" id="batterHandRow">
+      <label><input type="radio" name="batterHand" value="RHB" checked /> Right‑handed</label>
+      <label><input type="radio" name="batterHand" value="LHB" /> Left‑handed</label>
+    </div>
+  </div>
+
+  <!-- Pitch call section -->
+  <div class="panel">
+    <h2>Pitch Call</h2>
+
+    <div class="row">
+      <div class="count">Count: <span class="ball" id="balls">0</span>‑<span class="strike" id="strikes">0</span></div>
+      <span class="inline-note">Starts at 0‑0</span>
+    </div>
+
+    <div class="row" style="margin-top:0.5rem;">
+      <button id="suggestInitialBtn">Suggest Initial Pitch &amp; Location</button>
+      <span id="initMsg" class="inline-note"></span>
+    </div>
+
+    <div style="margin-top:0.75rem;">
+      <h3>Suggested Location</h3>
+      <p class="muted">Suggested pitch: <span class="suggestion" id="suggestedPitch">—</span></p>
+      <p class="muted">Suggested location: <span class="suggestion" id="suggestedLocation">—</span></p>
+
+      <!-- 3x3 zone table -->
+      <div class="grid-3" id="zoneGrid">
+        <div class="zone-cell" data-loc="top left of zone">Top Left</div>
+        <div class="zone-cell" data-loc="top middle of zone">Top Middle</div>
+        <div class="zone-cell" data-loc="top right of zone">Top Right</div>
+
+        <div class="zone-cell" data-loc="middle left of zone">Middle Left</div>
+        <div class="zone-cell" data-loc="middle of zone">Middle</div>
+        <div class="zone-cell" data-loc="middle right of zone">Middle Right</div>
+
+        <div class="zone-cell" data-loc="bottom left of zone">Bottom Left</div>
+        <div class="zone-cell" data-loc="middle bottom of zone">Middle Bottom</div>
+        <div class="zone-cell" data-loc="bottom right of zone">Bottom Right</div>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <h3>Ball or Strike</h3>
+      <div class="row" id="ballStrikeRow">
+        <label><input type="radio" name="ballOrStrike" value="Ball" /> Ball</label>
+        <label><input type="radio" name="ballOrStrike" value="Strike" /> Strike</label>
+      </div>
+
+      <h3 style="margin-top:0.75rem;">How was the last swing?</h3>
+      <div class="row" id="swingRow">
+        <label><input type="radio" name="swingTiming" value="Early" /> Early</label>
+        <label><input type="radio" name="swingTiming" value="Good" /> Good</label>
+        <label><input type="radio" name="swingTiming" value="Late" /> Late</label>
+        <label><input type="radio" name="swingTiming" value="No Swing" /> No Swing</label>
+      </div>
+
+      <div class="row" style="margin-top:0.75rem;">
+        <button id="suggestNextBtn">Suggest Next Pitch &amp; Location</button>
+        <span id="nextMsg" class="inline-note"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export section -->
+  <div class="panel">
+    <h2>Export</h2>
+    <p class="muted">Export session as JSON (handedness, 3–5 pitch mix, batter side, count history, swing timing incl. No Swing, AI suggestions).</p>
+    <div class="row">
+      <button id="exportBtn" class="secondary">Export JSON</button>
+      <span id="exportMsg" class="inline-note"></span>
+    </div>
+    <div class="muted" style="margin-top:0.5rem;"><strong>Session Log</strong></div>
+    <div id="log" class="log" aria-live="polite"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  /* ===========================
+     Constants & Pitch Metadata
+     =========================== */
+  const LOCATIONS = [
+    "top left of zone","top middle of zone","top right of zone",
+    "middle left of zone","middle of zone","middle right of zone",
+    "bottom left of zone","middle bottom of zone","bottom right of zone"
+  ];
+  const pitchMeta = {
+    "4-seam fastball":  { velo: "fast",  vert: "ride",  horiz: "neutral", role:"challenge" },
+    "2-seam fastball":  { velo: "fast",  vert: "drop",  horiz: "arm",     role:"edge" },
+    "Cutter":           { velo: "fast",  vert: "ride",  horiz: "glove",    role:"jam" },
+    "Sinker":           { velo: "fast",  vert: "drop",  horiz: "arm",      role:"arm-in" },
+    "Curveball":        { velo: "slow",  vert: "big",   horiz: "neutral",  role:"chase-low" },
+    "12-6 curveball":   { velo: "slow",  vert: "big",   horiz: "neutral",  role:"down-only" },
+    "Sweeping curveball":{velo:"slow",   vert: "mod",   horiz: "glove",    role:"away-sweep" },
+    "Knuckle-curve":    { velo: "slow",  vert: "big",   horiz: "neutral",  role:"chase-low" },
+    "Slurve":           { velo: "med",   vert: "mod",   horiz: "glove",    role:"away-break" },
+    "Slider":           { velo: "med",   vert: "mod",   horiz: "glove",    role:"away-break" },
+    "Sweeper":          { velo: "med",   vert: "mod",   horiz: "glove",    role:"big-away" },
+    "Changeup":         { velo: "slow",  vert: "mod",   horiz: "arm",      role:"away-off" },
+    "Circle change":    { velo: "slow",  vert: "mod",   horiz: "arm",      role:"away-off" },
+    "Vulcan change":    { velo: "slow",  vert: "mod",   horiz: "arm",      role:"drop-off" },
+    "Splitter":         { velo: "med",   vert: "big",   horiz: "neutral",  role:"bottom" },
+    "Forkball":         { velo: "slow",  vert: "big",   horiz: "neutral",  role:"bottom" },
+    "Screwball":        { velo: "slow",  vert: "mod",   horiz: "arm",      role:"glove-opp" }
+  };
+
+  /* ===========================
+     Global State
+     =========================== */
+  const state = {
+    temperature: 0.75,
+    pitcherHand: "RHP",
+    batterHand: "RHB",
+    arsenalLocked: false,
+    arsenal: [],
+    count: { balls: 0, strikes: 0 },
+    lastPitch: null,
+    lastOutcome: null,
+    lastSwingTiming: null,
+    log: []
+  };
+
+  /* ===========================
+     Utility Helpers
+     =========================== */
+  const el = (sel) => document.querySelector(sel);
+  const els = (sel) => Array.from(document.querySelectorAll(sel));
+
+  function appendLog(text) {
+    state.log.push(text);
+    const logEl = el("#log");
+    const entry = document.createElement("div");
+    entry.textContent = text;
+    logEl.appendChild(entry);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateCountDisplay() {
+    el("#balls").textContent = state.count.balls;
+    el("#strikes").textContent = state.count.strikes;
+  }
+
+  function softmaxSample(scores, temperature) {
+    const t = Math.max(0.15, temperature);
+    const exps = scores.map(s => Math.exp(s / t));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    const probs = exps.map(e => e / sum);
+    const r = Math.random();
+    let cum = 0;
+    for (let i = 0; i < probs.length; i++) {
+      cum += probs[i];
+      if (r <= cum) return i;
+    }
+    return probs.length - 1;
+  }
+
+  function highlightLocation(location) {
+    els(".zone-cell").forEach(cell => {
+      cell.classList.toggle("highlight", cell.dataset.loc === location);
+    });
+  }
+
+  function getSelectedPitches() {
+    return els("#pitchList input[type=checkbox]")
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+  }
+
+  function updateArsenalCount() {
+    const cnt = getSelectedPitches().length;
+    el("#arsenalCount").textContent = `Selected: ${cnt}`;
+  }
+
+  function setArsenalDisabled(disabled) {
+    els("#pitchList input[type=checkbox]").forEach(cb => cb.disabled = disabled);
+  }
+
+  /* ===========================
+     Scoring Heuristics
+     =========================== */
+  function handednessFactor(pitch, pitcherHand, batterHand) {
+    const sameHand = (pitcherHand === "RHP" && batterHand === "RHB") || (pitcherHand === "LHP" && batterHand === "LHB");
+    let score = 0;
+    if (sameHand) {
+      if (["Slider","Sweeper","Slurve","Sweeping curveball","Cutter"].includes(pitch)) score += 1.2;
+      if (["Sinker","2-seam fastball"].includes(pitch)) score += 0.8;
+      if (pitch === "4-seam fastball") score += 0.4;
+    } else {
+      if (["Changeup","Circle change","Vulcan change","Screwball"].includes(pitch)) score += 1.25;
+      if (["Splitter","Forkball"].includes(pitch)) score += 1.0;
+      if (pitch === "4-seam fastball") score += 0.5;
+    }
+    return score;
+  }
+
+  function countFactorPitch(pitch, balls, strikes) {
+    let score = 0;
+    const ahead = strikes >= 2;
+       const behind = balls >= 2 && strikes <= 1;
+    if (ahead) {
+      if (["Slider","Sweeper","Slurve","Curveball","12-6 curveball","Knuckle-curve","Changeup","Circle change","Vulcan change","Splitter","Forkball"].includes(pitch)) score += 1.1;
+    } else if (behind) {
+      if (["4-seam fastball","Sinker","2-seam fastball","Cutter"].includes(pitch)) score += 1.1;
+    } else {
+      score += 0.3;
+    }
+    return score;
+  }
+
+  function swingTimingFactorPitch(pitch, timing) {
+    if (!timing) return 0;
+    let score = 0;
+    if (timing === "Early") {
+      if (["Changeup","Circle change","Vulcan change","Curveball","12-6 curveball","Sweeping curveball","Slurve","Slider","Sweeper","Splitter","Forkball"].includes(pitch)) score += 1.1;
+    } else if (timing === "Late") {
+      if (["4-seam fastball","Cutter","Sinker","2-seam fastball"].includes(pitch)) score += 1.0;
+    } else if (timing === "Good") {
+      score += 0.2;
+    } else if (timing === "No Swing") {
+      score += 0.25;
+    }
+    return score;
+  }
+
+  function tunnelingFactorPitch(currPitch, last) {
+    if (!last) return 0.25;
+    let score = 0;
+    const lp = last.pitch;
+    if (lp === "4-seam fastball") {
+      if (["Curveball","12-6 curveball","Splitter","Forkball"].includes(currPitch)) score += 1.0;
+      if (["Slider","Sweeper","Slurve","Cutter"].includes(currPitch)) score += 0.7;
+    } else if (["Slider","Sweeper","Slurve"].includes(lp)) {
+      if (["4-seam fastball","Cutter","Changeup","Circle change"].includes(currPitch)) score += 0.8;
+    } else if (["Sinker","2-seam fastball"].includes(lp)) {
+      if (["Changeup","Circle change","Slider","Sweeper"].includes(currPitch)) score += 0.8;
+    } else if (["Splitter","Forkball","Curveball","12-6 curveball"].includes(lp)) {
+      if (["4-seam fastball","Cutter"].includes(currPitch)) score += 0.8;
+    }
+    return score;
+  }
+
+  function locationBaseScores(pitch, pitcherHand, batterHand, balls, strikes, swingTiming, last) {
+    const scores = Object.fromEntries(LOCATIONS.map(loc => [loc, 0.1]));
+    const sameHand = (pitcherHand === "RHP" && batterHand === "RHB") || (pitcherHand === "LHP" && batterHand === "LHB");
+
+    // Pitch tendencies
+    if (pitch === "4-seam fastball") {
+      scores["top middle of zone"] += 1.0;
+      scores["top left of zone"] += 0.5;
+      scores["top right of zone"] += 0.5;
+    }
+    if (["Sinker","2-seam fastball"].includes(pitch)) {
+      scores["middle bottom of zone"] += 0.9;
+      scores["bottom left of zone"] += 0.7;
+      scores["bottom right of zone"] += 0.7;
+    }
+    if (["Slider","Sweeper","Slurve","Sweeping curveball","Cutter"].includes(pitch)) {
+      // Away vs batter
+      if (sameHand) {
+        const away = (batterHand === "RHB") ? "right" : "left";
+        scores[`middle ${away} of zone`] += 0.9;
+        scores[`bottom ${away} of zone`] += 0.8;
+        scores[`top ${away} of zone`] += 0.4;
+      } else {
+        const backdoor = (batterHand === "RHB") ? "left" : "right";
+        scores[`middle ${backdoor} of zone`] += 0.6;
+        scores[`bottom ${backdoor} of zone`] += 0.5;
+      }
+    }
+    if (["Curveball","12-6 curveball","Knuckle-curve","Splitter","Forkball","Vulcan change"].includes(pitch)) {
+      scores["middle bottom of zone"] += 1.0;
+      scores["bottom left of zone"] += 0.6;
+      scores["bottom right of zone"] += 0.6;
+    }
+    if (["Changeup","Circle change","Screwball"].includes(pitch)) {
+      const awaySide = (sameHand ? ((batterHand==="RHB")?"right":"left") : ((batterHand==="RHB")?"left":"right"));
+      scores[`middle ${awaySide} of zone`] += 0.8;
+      scores[`bottom ${awaySide} of zone`] += 0.8;
+    }
+
+    // Count influence
+    const ahead = strikes >= 2;
+    const behind = balls >= 2 && strikes <= 1;
+    if (ahead) {
+      scores["bottom left of zone"] += 0.4;
+      scores["bottom right of zone"] += 0.4;
+      scores["top left of zone"] += 0.3;
+      scores["top right of zone"] += 0.3;
+    } else if (behind) {
+      scores["middle of zone"] += 0.8;
+      scores["middle left of zone"] += 0.5;
+      scores["middle right of zone"] += 0.5;
+    } else {
+      scores["middle of zone"] += 0.3;
+    }
+
+    // Swing timing
+    if (swingTiming === "Early") {
+      scores["bottom left of zone"] += 0.4;
+      scores["bottom right of zone"] += 0.4;
+      scores["middle bottom of zone"] += 0.2;
+    } else if (swingTiming === "Late") {
+      scores["top middle of zone"] += 0.4;
+      scores["top left of zone"] += 0.3;
+      scores["top right of zone"] += 0.3;
+    } else if (swingTiming === "Good") {
+      scores["middle left of zone"] += 0.25;
+      scores["middle right of zone"] += 0.25;
+    }
+
+    // Tunneling with last location
+    if (last && last.location) {
+      const loc = last.location;
+      if (loc.includes("top")) {
+        scores["middle bottom of zone"] += 0.4;
+        scores["bottom left of zone"] += 0.3;
+        scores["bottom right of zone"] += 0.3;
+      }
+      if (loc.includes("bottom")) {
+        scores["top middle of zone"] += 0.3;
+      }
+      if (loc.includes("left")) {
+        scores["middle left of zone"] += 0.25;
+      }
+      if (loc.includes("right")) {
+        scores["middle right of zone"] += 0.25;
+      }
+    }
+
+    return scores;
+  }
+
+  function scorePitchesAndLocations(arsenal) {
+    const balls = state.count.balls;
+    const strikes = state.count.strikes;
+    const pitcherHand = state.pitcherHand;
+    const batterHand = state.batterHand;
+    const timing = state.lastSwingTiming;
+
+    const pitchScores = arsenal.map(p => {
+      let s = 0.25;
+      s += handednessFactor(p, pitcherHand, batterHand);
+      s += countFactorPitch(p, balls, strikes);
+      s += swingTimingFactorPitch(p, timing);
+      s += tunnelingFactorPitch(p, state.lastPitch);
+      return s;
+    });
+
+    const locationScoresByPitch = arsenal.map(p =>
+      locationBaseScores(p, pitcherHand, batterHand, balls, strikes, timing, state.lastPitch)
+    );
+
+    return { pitchScores, locationScoresByPitch };
+  }
+
+  /* ===========================
+     Suggestion & Outcome Logic
+     =========================== */
+  function suggestPitchAndLocation(isInitial = false) {
+    if (!state.arsenalLocked || state.arsenal.length < 3) {
+      el("#initMsg").innerHTML = `<span class="error">Select and lock 3–5 pitches first.</span>`;
+      return;
+    }
+    const { pitchScores, locationScoresByPitch } = scorePitchesAndLocations(state.arsenal);
+
+    // Sample pitch via softmax
+    const pi = softmaxSample(pitchScores, state.temperature);
+    const pitch = state.arsenal[pi];
+
+    // Sample location via softmax
+    const locScoresObj = locationScoresByPitch[pi];
+    const locScoresArr = LOCATIONS.map(loc => locScoresObj[loc] ?? 0.05);
+    const li = softmaxSample(locScoresArr, state.temperature);
+    const location = LOCATIONS[li];
+
+    // Update UI
+    el("#suggestedPitch").textContent = pitch;
+    el("#suggestedLocation").textContent = location;
+    highlightLocation(location);
+
+    // Update state
+    state.lastPitch = { pitch, location };
+
+    // Log
+    const prefix = isInitial ? "Initial Suggestion" : "Next Suggestion";
+    appendLog(`${prefix} — Pitch: ${pitch}, Location: ${location} (Count ${state.count.balls}-${state.count.strikes}, Temp ${state.temperature.toFixed(2)})`);
+    if (isInitial) el("#initMsg").textContent = "";
+  }
+
+  function applyOutcomeToCount(outcome) {
+    if (outcome === "Ball") {
+      state.count.balls = Math.min(3, state.count.balls + 1);
+    } else if (outcome === "Strike") {
+      state.count.strikes = Math.min(2, state.count.strikes + 1);
+    }
+    updateCountDisplay();
+  }
+
+  function resetOutcomeRadios() {
+    els("input[name='ballOrStrike']").forEach(r => r.checked = false);
+    els("input[name='swingTiming']").forEach(r => r.checked = false);
+  }
+
+  /* ===========================
+     Export
+     =========================== */
+  function exportJSON() {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      pitcherHand: state.pitcherHand,
+      batterHand: state.batterHand,
+      temperature: state.temperature,
+      arsenal: state.arsenal.slice(),
+      count: { ...state.count },
+      lastSwingTiming: state.lastSwingTiming || null,
+      lastOutcome: state.lastOutcome || null,
+      lastSuggestion: state.lastPitch ? { ...state.lastPitch } : null,
+      log: state.log.slice()
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pitch_caller_session_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    el("#exportMsg").innerHTML = `<span class="success">Exported session JSON.</span>`;
+  }
+
+  /* ===========================
+     Event Wiring
+     =========================== */
+  // Slider
+  const slider = el("#tempSlider");
+  slider.addEventListener("input", () => {
+    state.temperature = parseFloat(slider.value);
+    el("#tempLabel").textContent = `Temperature: ${state.temperature.toFixed(2)} (Lower = more deterministic, Higher = more varied)`;
+  });
+
+  // Handedness radios
+  els("input[name='pitcherHand']").forEach(r =>
+    r.addEventListener("change", () => { if (r.checked) state.pitcherHand = r.value; })
+  );
+  els("input[name='batterHand']").forEach(r =>
+    r.addEventListener("change", () => { if (r.checked) state.batterHand = r.value; })
+  );
+
+  // Arsenal selection tracking (two-column container still uses #pitchList)
+  els("#pitchList input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const selected = getSelectedPitches();
+      // Enforce max 5 during selection
+      if (selected.length > 5) {
+        cb.checked = false;
+        el("#arsenalMsg").innerHTML = `<span class="error">You can select at most 5 pitches.</span>`;
+      } else {
+        el("#arsenalMsg").textContent = "";
+      }
+      updateArsenalCount();
+    });
+  });
+
+  // Lock / Edit arsenal
+  el("#lockArsenalBtn").addEventListener("click", () => {
+    const selected = getSelectedPitches();
+    if (selected.length < 3 || selected.length > 5) {
+      el("#arsenalMsg").innerHTML = `<span class="error">Please select between 3 and 5 pitches.</span>`;
+      return;
+    }
+    state.arsenal = selected;
+    state.arsenalLocked = true;
+    setArsenalDisabled(true);
+    el("#lockArsenalBtn").disabled = true;
+    el("#editArsenalBtn").disabled = false;
+    el("#arsenalMsg").innerHTML = `<span class="success">Arsenal locked.</span>`;
+    appendLog(`Arsenal locked: ${state.arsenal.join(", ")}`);
+  });
+
+  el("#editArsenalBtn").addEventListener("click", () => {
+    state.arsenalLocked = false;
+    setArsenalDisabled(false);
+    el("#lockArsenalBtn").disabled = false;
+    el("#editArsenalBtn").disabled = true;
+    el("#arsenalMsg").innerHTML = `<span class="success">Arsenal unlocked. Adjust as needed, then lock again.</span>`;
+    appendLog(`Arsenal unlocked for changes.`);
+  });
+
+  // Initial suggestion
+  el("#suggestInitialBtn").addEventListener("click", () => {
+    // Reset count and sequencing context
+    state.count.balls = 0;
+    state.count.strikes = 0;
+    state.lastPitch = null; // clear tunneling context
+    updateCountDisplay();
+    appendLog("Manual reset: New at-bat started (count 0-0).");
+
+    // Suggest initial pitch for the new at-bat
+    suggestPitchAndLocation(true);
+  });
+
+  // Outcome radios
+  els("input[name='ballOrStrike']").forEach(r => {
+    r.addEventListener("change", () => {
+      if (r.checked) state.lastOutcome = r.value;
+    });
+  });
+  els("input[name='swingTiming']").forEach(r => {
+    r.addEventListener("change", () => {
+      if (r.checked) state.lastSwingTiming = r.value;
+    });
+  });
+
+  // Next suggestion
+  el("#suggestNextBtn").addEventListener("click", () => {
+    const outcome = state.lastOutcome;
+    const timing = state.lastSwingTiming;
+
+    if (!outcome || !timing) {
+      el("#nextMsg").innerHTML = `<span class="error">Select Ball or Strike and How was the last swing?</span>`;
+      return;
+    }
+    // Update count first
+    applyOutcomeToCount(outcome);
+    // Suggest next based on updated context
+    suggestPitchAndLocation(false);
+    // Reset per spec
+    resetOutcomeRadios();
+    state.lastOutcome = null;
+    state.lastSwingTiming = null;
+    el("#nextMsg").innerHTML = `<span class="success">Next pitch suggested. Inputs reset.</span>`;
+  });
+
+  // Export
+  el("#exportBtn").addEventListener("click", exportJSON);
+
+  // Optional: clicking a zone cell highlights it and sets the suggestion text
+  els(".zone-cell").forEach(cell => {
+    cell.addEventListener("click", () => {
+      const loc = cell.dataset.loc;
+      highlightLocation(loc);
+      el("#suggestedLocation").textContent = loc;
+    });
+  });
+
+  // Initial render
+  updateCountDisplay();
+});
+</script>
+</body>
+</html>
