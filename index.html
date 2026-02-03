@@ -153,7 +153,7 @@
         <div class="zone-cell" data-loc="middle right of zone">Middle Right</div>
 
         <div class="zone-cell" data-loc="bottom left of zone">Bottom Left</div>
-        <div class="zone-cell" data-loc="middle bottom of zone">Middle Bottom</div>
+        <div class="zone-cell" data-loc="middle bottom of zone" style="text-align: center;">Bottom Middle</div>
         <div class="zone-cell" data-loc="bottom right of zone">Bottom Right</div>
       </div>
     </div>
@@ -195,7 +195,7 @@
   <!-- About section -->
   <div class="panel">
     <h2 id="about">About This Project</h2>
-  <p class="muted">Pitchers want to keep hitters guessing. If they always throw the same pitch in the same situation, hitters will figure it out. So, this tool uses stochastic sampling to introduce randomness in a smart way.</p>
+  <p class="muted">This tool was inspiried by playing online games in <strong><a href="https://theshow.com/" style="color: white;">MLB the Show</a></strong>. It is easy to fall into predicitable patterns when pitching over multiple innings. Pitchers want to keep hitters guessing. If they always throw the same pitch in the same situation, hitters will figure it out. So, this tool uses stochastic sampling to introduce randomness in a smart way.</p>
 
   <p class="muted">Instead of always picking the single “best” pitch, it uses a technique called softmax sampling (a form of stochastic sampling) to turn factors like the pitcher’s handedness, the batter’s side, the selected pitch mix, the current count, and the batter’s swing timing into probabilities and then randomly selects a pitch and location based on those probabilities. This means the choices aren’t completely random — they’re weighted toward smarter options — but they’re not predictable either.
 </p>
@@ -210,9 +210,7 @@
   <p class="muted">After an at bat has ended, click the "Suggest Next Pitch and Location" button to begin a new sequence. 
   </p>
 
-  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
-
-  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
+  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis.</p>
 
   <p class="muted">This project is open source and released under the GNU General Public License v3.0 (GPL-3.0); <strong><a href="https://github.com/kowalike/baseball-pitch-caller" style="color: white;">visit the GitHub repository to view, use, and contribute to the source code.</a></strong></p>
   
