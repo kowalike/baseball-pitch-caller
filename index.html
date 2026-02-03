@@ -56,23 +56,9 @@
 <body>
 <div class="container">
   <h1>Baseball Pitch Caller</h1>
-  <p class="muted">Pitchers want to keep hitters guessing. If they always throw the same pitch in the same situation, hitters will figure it out. So, this tool uses stochastic sampling to introduce randomness in a smart way.</p>
-
-  <p class="muted">Instead of always picking the single “best” pitch, it uses a technique called softmax sampling (a form of stochastic sampling) to turn factors like the pitcher’s handedness, the batter’s side, the selected pitch mix, the current count, and the batter’s swing timing into probabilities and then randomly selects a pitch and location based on those probabilities. This means the choices aren’t completely random — they’re weighted toward smarter options — but they’re not predictable either.
-</p>
-
-  <p class="muted">To use the tool, first adjust the Stochastic Sampling temperature slider to how “wild” or “safe” the recommendations are. Then select the pitcher's handedness, the pitcher's arsenal (chose between 3 and 5 pitches) and which side the batter is hitting from.
-</p>
+  <p class="muted"> <strong><a href="#about" style="color: white;">About This Project &raquo;</a></strong></p>
 
 
-  <p class="muted">Next, click the "Suggest Initial Pitch & Location" button to generate the first pitch of the sequence. Report whether the pitch was a ball or strike and the swing timing.
-  </p>
-
-  <p class="muted">After an at bat has ended, click the "Suggest Next Pitch and Location" button to begin a new sequence. 
-  </p>
-
-  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
-  
   <!-- Stochastic slider -->
   <div class="panel" id="stochastic-panel">
     <h2>Stochastic Sampling</h2>
@@ -205,6 +191,34 @@
     <div class="muted" style="margin-top:0.5rem;"><strong>Session Log</strong></div>
     <div id="log" class="log" aria-live="polite"></div>
   </div>
+  
+  <!-- About section -->
+  <div class="panel">
+    <h2 id="about">About This Project</h2>
+  <p class="muted">Pitchers want to keep hitters guessing. If they always throw the same pitch in the same situation, hitters will figure it out. So, this tool uses stochastic sampling to introduce randomness in a smart way.</p>
+
+  <p class="muted">Instead of always picking the single “best” pitch, it uses a technique called softmax sampling (a form of stochastic sampling) to turn factors like the pitcher’s handedness, the batter’s side, the selected pitch mix, the current count, and the batter’s swing timing into probabilities and then randomly selects a pitch and location based on those probabilities. This means the choices aren’t completely random — they’re weighted toward smarter options — but they’re not predictable either.
+</p>
+
+  <p class="muted">To use the tool, first adjust the Stochastic Sampling temperature slider to how “wild” or “safe” the recommendations are. Then select the pitcher's handedness, the pitcher's arsenal (chose between 3 and 5 pitches) and which side the batter is hitting from.
+</p>
+
+
+  <p class="muted">Next, click the "Suggest Initial Pitch & Location" button to generate the first pitch of the sequence. Report whether the pitch was a ball or strike and the swing timing.
+  </p>
+
+  <p class="muted">After an at bat has ended, click the "Suggest Next Pitch and Location" button to begin a new sequence. 
+  </p>
+
+  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
+
+  <p class="muted">You can also export the session as a JSON file if you would like to perform further analysis of the session.</p>
+
+  <p class="muted">This project is open source and released under the GNU General Public License v3.0 (GPL-3.0); <strong><a href="https://github.com/kowalike/baseball-pitch-caller" style="color: white;">visit the GitHub repository to view, use, and contribute to the source code.</a></strong></p>
+  
+      </div>  
+  
+  
 </div>
 
 <script>
